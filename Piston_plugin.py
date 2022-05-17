@@ -34,6 +34,7 @@ def build_translate_joints(start, end) :
     effectort_end = pm.joint(name= 'TranslateEndJoint', p= end_pos)
     pm.joint(effector_start, edit=True, oj = 'xyz', sao='yup')
     pm.joint(effectort_end,edit = True, o= (0, 0, 0))
+
     return effector_start, effectort_end
 
 def select_joints():
@@ -57,6 +58,23 @@ def build_setup() :
     rotate_center,crank_end, shaft_end = select_joints()
     effector_start, effectort_end = build_translate_joints(rotate_center, shaft_end)
     return rotate_center,crank_end, shaft_end, effector_start, effectort_end
+
+def find_offset_axis(node) :
+    forbiden_values = (
+        90,
+        -90,
+        180,
+        -180)
+    orient_axis = ('.jointOrientX',
+                   '.jointOrientY',
+                   '.jointOrientZ',)
+    for axis in orient_axis :
+        value = pm.getAttr(node + axis)
+        for forbid in forbiden_values :
+            if value != (forbid or 0):
+                return axis
+            else :
+                pass
 
 class pistonNode(OpenMaya.MPxNode):
     ''' New solver for piston rig'''
@@ -84,31 +102,31 @@ class pistonNode(OpenMaya.MPxNode):
         numeric_attribute = OpenMaya.MFnNumericAttribute()
 
         # first attribute of the node
-        cls.input_crank_lenght = numeric_attribute.create(
-            'crankLenght',  # longname
+        cls.input_crank_length = numeric_attribute.create(
+            'crankLength',  # longname
             'crank_l',  # shortname
             OpenMaya.MFnNumericData.kFloat  # attribute type
         )
         numeric_attribute.readable = False
         numeric_attribute.writable = True
         numeric_attribute.keyable = True
-        cls.addAttribute(cls.input_crank_lenght)
+        cls.addAttribute(cls.input_crank_length)
 
         # second attribute of the node
-        cls.input_shaft_lenght = numeric_attribute.create(
-            'shaftLenght',  # longname
-            'shaft_R',  # shortname
+        cls.input_shaft_length = numeric_attribute.create(
+            'shaftLength',  # longname
+            'shaft_l',  # shortname
             OpenMaya.MFnNumericData.kFloat  # attribute type
         )
         numeric_attribute.readable = False
         numeric_attribute.writable = True
         numeric_attribute.keyable = True
-        cls.addAttribute(cls.input_shaft_lenght)
+        cls.addAttribute(cls.input_shaft_length)
 
         # third attribute of the node
         cls.input_angle = numeric_attribute.create(
             'inputAngle',  # longname
-            'i_angle',  # shortname
+            'input_angle',  # shortname
             OpenMaya.MFnNumericData.kFloat  # attribute type
         )
         numeric_attribute.readable = False
@@ -118,8 +136,8 @@ class pistonNode(OpenMaya.MPxNode):
 
         # output attribute of the node
         cls.output = numeric_attribute.create(
-            'output',  # longname
-            'o',  # shortname
+            'Output',  # longname
+            'output',  # shortname
             OpenMaya.MFnNumericData.kFloat  # attribute type
         )
         numeric_attribute.readable = True
@@ -141,12 +159,12 @@ class pistonNode(OpenMaya.MPxNode):
         '''
         if plug == self.output:
             angle_value = data_block.inputValue(self.input_angle).asFloat() + 90
-            shaft_lenght_value = data_block.inputValue(self.input_shaft_lenght).asFloat()
-            crank_lenght_value = data_block.inputValue(self.input_crank_lenght).asFloat()
+            shaft_length_value = data_block.inputValue(self.input_shaft_length).asFloat()
+            crank_length_value = data_block.inputValue(self.input_crank_length).asFloat()
 
-            piston_move = math.sin(math.radians(angle_value)) * crank_lenght_value + math.sqrt(
-                pow(shaft_lenght_value, 2) - pow(math.cos(math.radians(angle_value )), 2) * pow(crank_lenght_value, 2))
-            print(piston_move)
+            piston_move = math.sin(math.radians(angle_value)) * crank_length_value + math.sqrt(
+                pow(shaft_length_value, 2) - pow(math.cos(math.radians(angle_value )), 2) * pow(crank_length_value, 2))
+
             # get the output handdle, set its new value and set it as clean
             output_handle = data_block.outputValue(self.output)
             output_handle.setFloat(piston_move)
@@ -164,10 +182,23 @@ class generatePiston(OpenMaya.MPxCommand):
         return generatePiston()
 
     def doIt(self, args):
-        print('Done')
         rotate_center, crank_end, shaft_end, effector_start, effector_end = build_setup()
+        rotate_center_joint = pm.PyNode(rotate_center)
+        crank_end_joint = pm.PyNode(crank_end)
+        shaft_end_joint = pm.PyNode(shaft_end)
         piston_solver = pm.createNode('pistonNode')
-        pm.connectAttr(rotate_center.rotateZ, piston_solver.input_angle)
+        pm.joint(rotate_center, edit=True, oj='xyz')
+        angle_offset = pm.createNode('plusMinusAverage', name='compensateAngleOffset')
+        pm.setAttr(angle_offset.op, 2)
+        #print('Axis to plug is : {}'.format(find_offset_axis(rotate_center_joint)))
+        pm.connectAttr(rotate_center_joint.rotateZ, angle_offset.input1D[0])
+        pm.connectAttr(rotate_center_joint.jointOrientY , angle_offset.input1D[1])
+        pm.connectAttr(angle_offset.output1D, piston_solver.input_angle)
+        pm.connectAttr(crank_end_joint.translateX, piston_solver.crank_l)
+        pm.connectAttr(shaft_end_joint.translateX, piston_solver.shaft_l)
+        pm.connectAttr(piston_solver.output,  effector_end.translateX)
+        pm.aimConstraint(effector_end, crank_end,aimVector = (1,0,0))
+        return piston_solver
 
 
 
