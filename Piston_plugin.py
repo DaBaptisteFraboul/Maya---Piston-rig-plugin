@@ -76,13 +76,94 @@ def find_offset_axis(node) :
             else :
                 pass
 
+
+class vectorLengthNode(OpenMaya.MPxNode):
+    '''A node that return the length of a given vector'''
+    type_id = OpenMaya.MTypeId(0x900FF)
+    type_name = 'vectorLength'
+
+    input_x = None
+    input_y = None
+    input_z = None
+    output = None
+
+    def __init__(self):
+        OpenMaya.MPxNode.__init__(self)
+
+    @classmethod
+    def creator(cls):
+        return cls()
+
+    @classmethod
+    def initialize(cls):
+        print('Plugin init  : {} '.format(vectorLengthNode.type_name))
+        numeric_attribute = OpenMaya.MFnNumericAttribute()
+
+        cls.input_x = numeric_attribute.create(
+            'input_x',
+            'x',
+            OpenMaya.MFnNumericData.kFloat
+        )
+        numeric_attribute.readable = False
+        numeric_attribute.writable = True
+        numeric_attribute.keyable = True
+        cls.addAttribute(cls.input_x)
+
+        cls.input_y = numeric_attribute.create(
+            'input_y',
+            'y',
+            OpenMaya.MFnNumericData.kFloat
+        )
+        numeric_attribute.readable = False
+        numeric_attribute.writable = True
+        numeric_attribute.keyable = True
+        cls.addAttribute(cls.input_y)
+
+        cls.input_z = numeric_attribute.create(
+            'input_z',
+            'z',
+            OpenMaya.MFnNumericData.kFloat
+        )
+        numeric_attribute.readable = False
+        numeric_attribute.writable = True
+        numeric_attribute.keyable = True
+        cls.addAttribute(cls.input_z)
+
+        cls.output = numeric_attribute.create(
+            'Output',  # longname
+            'output',  # shortname
+            OpenMaya.MFnNumericData.kFloat  # attribute type
+        )
+        numeric_attribute.readable = True
+        numeric_attribute.writable = False
+        cls.addAttribute(cls.output)
+
+        cls.attributeAffects(cls.input_x, cls.output)
+        cls.attributeAffects(cls.input_y, cls.output)
+        cls.attributeAffects(cls.input_z, cls.output)
+
+    def compute(self, plug, datablock):
+
+        if plug == self.output:
+            inputX = datablock.inputValue(self.input_x).asFloat()
+            inputY = datablock.inputValue(self.input_y).asFloat()
+            inputZ = datablock.inputValue(self.input_z).asFloat()
+
+            result = math.sqrt(math.pow(inputX,2) + (math.pow(inputY,2))+ (math.pow(inputZ,2)))
+
+            output_handle = datablock.outputValue(self.output)
+            output_handle.setFloat(result)
+            output_handle.setClean()
+
+
+
 class pistonNode(OpenMaya.MPxNode):
     ''' New solver for piston rig'''
     type_id = OpenMaya.MTypeId(0x00000001)
     type_name = 'pistonNode'
     # Attribute
-    input_crank_lenght = None
-    input_shaft_lenght = None
+    input_crank_length = None
+    input_shaft_length = None
     input_angle = None
     output = None
 
@@ -146,8 +227,8 @@ class pistonNode(OpenMaya.MPxNode):
 
         # add dependencies
         cls.attributeAffects(cls.input_angle, cls.output)
-        cls.attributeAffects(cls.input_shaft_lenght, cls.output)
-        cls.attributeAffects(cls.input_crank_lenght, cls.output)
+        cls.attributeAffects(cls.input_shaft_length, cls.output)
+        cls.attributeAffects(cls.input_crank_length, cls.output)
 
     def compute(self, plug, data_block):
         '''
@@ -201,7 +282,6 @@ class generatePiston(OpenMaya.MPxCommand):
         return piston_solver
 
 
-
 def initializePlugin(plugin):
     '''
     Called when the plugin is initialized
@@ -222,12 +302,20 @@ def initializePlugin(plugin):
             pistonNode.initialize,
             OpenMaya.MPxNode.kDependNode
         )
-
     except:
         print('Failed to initialize the plugin :  {} !'.format(pistonNode.type_name))
         raise
-
-
+    try :
+        plugin_fn.registerNode(
+            vectorLengthNode.type_name,
+            vectorLengthNode.type_id,
+            vectorLengthNode.creator,
+            vectorLengthNode.initialize,
+            OpenMaya.MPxNode.kDependNode
+        )
+    except :
+        print('Failed to initialize the plugin :  {} !'.format(vectorLengthNode.type_name))
+        raise
 def uninitializePlugin(plugin):
     '''
     Called when the plugin is unloaded in Maya
@@ -240,6 +328,7 @@ def uninitializePlugin(plugin):
 
     try:
         plugin_fn.deregisterCommand(generatePiston.kPluginCmdName)
+        plugin_fn.deregisterNode(vectorLengthNode.type_id)
         plugin_fn.deregisterNode(pistonNode.type_id)
     except:
         print('Failed to uninitialize the plugin :  {} !'.format(pistonNode.type_name))
