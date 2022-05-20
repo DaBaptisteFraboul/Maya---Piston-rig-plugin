@@ -3,61 +3,67 @@ import math
 import pymel.core as pm
 maya_useNewAPI = True
 
-def check_for_intermediate_joint(joint_1_dag, joint_2_dag):
-    dagModifer_1 = OpenMaya.MFnDagNode(joint_1_dag)
-    dagModifer_2 = OpenMaya.MFnDagNode(joint_2_dag)
-    joint_1_child = dagModifer_1.child(0)
-    joint_2_parent = dagModifer_2.parent(0)
-    if joint_1_child and joint_2_dag :
-        if joint_1_child == joint_2_parent :
-            joint_3_dag = OpenMaya.MDagPath.getAPathTo(joint_1_child)
-            return joint_1_child, joint_3_dag
-    else :
-        OpenMaya.MGlobal.displayError('There is no intermediate child beetween {} and {}'.format(joint_1_dag.partialPathName(),
-                                                                                                 joint_2_dag.partialPathName()))
 
-def build_translate_joints(start, end) :
-    print(start)
-    print(end)
+def buildEffectorJoints(start, end):
     start_joint = pm.PyNode(start)
     end_joint = pm.PyNode(end)
     start_pos = (pm.getAttr(start_joint.translateX),
                  pm.getAttr(start_joint.translateY),
                  pm.getAttr(start_joint.translateZ))
-    end_pos = pm.xform(end_joint,q=True,t=True,ws=True)
-    '''end_pos =   (pm.getAttr(end_joint.translateX)+pm.getAttr(mid_joint.translateX),
-                 pm.getAttr(end_joint.translateY)+pm.getAttr(mid_joint.translateY),
-                 pm.getAttr(end_joint.translateZ) + pm.getAttr(mid_joint.translateZ))'''
-    print(start_pos)
-    pm.select(cl = True)
-    effector_start = pm.joint(name = 'TranslationStartJoint', p = start_pos)
-    effectort_end = pm.joint(name= 'TranslateEndJoint', p= end_pos)
-    pm.joint(effector_start, edit=True, oj = 'xyz', sao='yup')
-    pm.joint(effectort_end,edit = True, o= (0, 0, 0))
+    end_pos = pm.xform(end_joint, q=True, t=True, ws=True)
+
+    pm.select(cl=True)
+    effector_start = pm.joint(name='TranslationStartJoint', p=start_pos)
+    effectort_end = pm.joint(name='TranslateEndJoint', p=end_pos)
+    pm.joint(effector_start, edit=True, oj='xyz', sao='yup')
+    pm.joint(effectort_end, edit=True, o=(0, 0, 0))
 
     return effector_start, effectort_end
 
-def select_joints():
-    #selection = OpenMaya.MSelectionList()
-    OpenMaya.MGlobal.setTrackSelectionOrderEnabled(True)
-    selection = OpenMaya.MGlobal.getActiveSelectionList()
-    print(OpenMaya.MGlobal.trackSelectionOrderEnabled())
-    if selection.length() == 2 :
-        crank_rotation_joint_dag = selection.getDagPath(0)
-        crank_rotation_joint_node = crank_rotation_joint_dag.node()
-        shaft_end_dag = selection.getDagPath(1)
-        shaft_end_node = shaft_end_dag.node()
-        shaft_start_node, shaft_start_dag = check_for_intermediate_joint(crank_rotation_joint_dag,shaft_end_dag)
-        return crank_rotation_joint_dag, shaft_start_dag, shaft_end_dag
+
+def doPistonGraph(base_joint, crank_end_joint, shaft_end_joint, effector_end):
+    axis = [
+        'translateX',
+        'translateY',
+        'translateZ'
+    ]
+
+    angle_between_inputs = [
+        '.vector1X',
+        '.vector1Y',
+        '.vector1Z'
+    ]
+
+    vector_inputs = [
+        '.input_x',
+        '.input_y',
+        '.input_z'
+    ]
+
+    solver = pm.createNode('pistonNode', name='pistonSolver')
+    offset_angle = pm.createNode('angleBetween', name='offsetWithCrankEnd')
+    neutral_rot = pm.createNode('addDoubleLinear', name='rotateToNeutralPoint')
+    shaft_length = pm.createNode('pistonVectorLength', name='shaftLength')
+    crank_length = pm.createNode('pistonVectorLength', name='crankLength')
+    plus_minus = pm.createNode('plusMinusAverage', name='substractOffset')
+
+    for i in range(0, 3):
+        crank_end_joint.attr(axis[i]).connect(crank_length + vector_inputs[i])
+        shaft_end_joint.attr(axis[i]).connect(shaft_length + vector_inputs[i])
+        crank_end_joint.attr(axis[i]).connect(offset_angle.vector1 + angle_between_inputs[i])
+
+    base_joint.rotateZ.connect(plus_minus.input1D[0])
+    offset_angle.euler.eulerZ.connect(plus_minus.input1D[1])
+    # plus_minus.operation.set(2)
+    plus_minus.output1D.connect(neutral_rot.input1)
+    neutral_rot.input2.set(90)
+    neutral_rot.output.connect(solver.inputAngle)
+    shaft_length.output.connect(solver.shaftLength)
+    crank_length.output.connect(solver.crankLength)
+    solver.output.connect(effector_end.translateX)
 
 
-    else :
-        OpenMaya.MGlobal.displayError('You need to select 2 joints : {} selected'.format(selection.length()))
 
-def build_setup() :
-    rotate_center,crank_end, shaft_end = select_joints()
-    effector_start, effectort_end = build_translate_joints(rotate_center, shaft_end)
-    return rotate_center,crank_end, shaft_end, effector_start, effectort_end
 
 def find_offset_axis(node) :
     forbiden_values = (
@@ -77,10 +83,10 @@ def find_offset_axis(node) :
                 pass
 
 
-class vectorLengthNode(OpenMaya.MPxNode):
+class pistonVectorLengthNode(OpenMaya.MPxNode):
     '''A node that return the length of a given vector'''
     type_id = OpenMaya.MTypeId(0x900FF)
-    type_name = 'vectorLength'
+    type_name = 'pistonVectorLength'
 
     input_x = None
     input_y = None
@@ -96,7 +102,7 @@ class vectorLengthNode(OpenMaya.MPxNode):
 
     @classmethod
     def initialize(cls):
-        print('Plugin init  : {} '.format(vectorLengthNode.type_name))
+        print('Plugin init  : {} '.format(pistonVectorLengthNode.type_name))
         numeric_attribute = OpenMaya.MFnNumericAttribute()
 
         cls.input_x = numeric_attribute.create(
@@ -232,9 +238,9 @@ class pistonNode(OpenMaya.MPxNode):
 
     def compute(self, plug, data_block):
         '''
-        Compute the output of the node
+        COpenMayapute the output of the node
 
-        :param plug: MPlug representing the attributes to recompute
+        :param plug: MPlug representing the attributes to recOpenMayapute
         :param data_block: MDataBlockis the storage of datas for the node's attribute
         :return:
         '''
@@ -253,7 +259,7 @@ class pistonNode(OpenMaya.MPxNode):
 
 
 class generatePiston(OpenMaya.MPxCommand):
-    kPluginCmdName = 'generatePistonCmd'
+    kPluginCmdName = 'generatePiston'
 
     def __init__(self):
         OpenMaya.MPxCommand.__init__(self)
@@ -263,23 +269,61 @@ class generatePiston(OpenMaya.MPxCommand):
         return generatePiston()
 
     def doIt(self, args):
-        rotate_center, crank_end, shaft_end, effector_start, effector_end = build_setup()
-        rotate_center_joint = pm.PyNode(rotate_center)
-        crank_end_joint = pm.PyNode(crank_end)
-        shaft_end_joint = pm.PyNode(shaft_end)
-        piston_solver = pm.createNode('pistonNode')
-        pm.joint(rotate_center, edit=True, oj='xyz')
-        angle_offset = pm.createNode('plusMinusAverage', name='compensateAngleOffset')
-        pm.setAttr(angle_offset.op, 2)
-        #print('Axis to plug is : {}'.format(find_offset_axis(rotate_center_joint)))
-        pm.connectAttr(rotate_center_joint.rotateZ, angle_offset.input1D[0])
-        pm.connectAttr(rotate_center_joint.jointOrientY , angle_offset.input1D[1])
-        pm.connectAttr(angle_offset.output1D, piston_solver.input_angle)
-        pm.connectAttr(crank_end_joint.translateX, piston_solver.crank_l)
-        pm.connectAttr(shaft_end_joint.translateX, piston_solver.shaft_l)
-        pm.connectAttr(piston_solver.output,  effector_end.translateX)
-        pm.aimConstraint(effector_end, crank_end,aimVector = (1,0,0))
-        return piston_solver
+
+        # get selection
+        selection = pm.ls(selection=True, type='joint')
+
+        # test if selected is a joint and that it has only 2 children that are also joints
+        if selection:
+            print(pm.nodeType(selection[0]))
+            if len(selection) == 2 and pm.nodeType(selection[0]) == 'joint':
+                base_joint = selection[0]
+                direct_child = pm.listRelatives(base_joint, type='joint')
+                base_joint.setAttr('displayLocalAxis', True)
+                if len(direct_child) == 1:
+                    base_joint.rotateX.unlock()
+                    base_joint.rotateY.unlock()
+                    shaft_end = selection[1]
+                    print('shaft_end joint = {}'.format(shaft_end))
+                    crank_end = direct_child[0]
+                    print('crank_end joint = {}'.format(crank_end))
+
+                    pm.parent((base_joint, shaft_end, crank_end), world=True)
+                    # do the aim constraint to properly align basejoint to children
+                    temp_constraint = pm.aimConstraint(shaft_end, base_joint, worldUpType='object',
+                                                       worldUpObject=crank_end)
+                    pm.refresh()
+                    pm.delete(temp_constraint)
+
+                    effector_start, effector_end = buildEffectorJoints(base_joint, shaft_end)
+                    pm.delete(shaft_end)
+                    pm.select(clear=True)
+                    start_pos = pm.xform(effector_end, q=True, t=True, ws=True)
+                    end_pos = pm.xform(crank_end, q=True, t=True, ws=True)
+                    shaft_start = pm.joint(name='shaft_start_joint', p=end_pos)
+                    shaft_end = pm.joint(name='shaft_end_joint', p=start_pos)
+
+                    pm.aimConstraint(crank_end, shaft_end)
+                    pm.parent(shaft_end, effector_end)
+                    pm.parent(shaft_start, shaft_end)
+                    root_joint = pm.duplicate(base_joint, name='Root_joint')[0]
+                    root_joint.radius.set(2 * base_joint.radius.get())
+                    pm.parent(effector_start, root_joint)
+                    pm.parent(base_joint, root_joint)
+                    pm.makeIdentity(base_joint, apply=True)
+                    pm.parent(crank_end, base_joint)
+                    doPistonGraph(base_joint, crank_end, shaft_start, effector_end)
+                    base_joint.rotateX.lock()
+                    base_joint.rotateY.lock()
+
+                else:
+                    OpenMaya.MGlobal.displayError('First joint must have only children to generate piston rig')
+            else:
+                OpenMaya.MGlobal.displayError('You must select only 2 joint : start and end joints')
+
+        # no selection
+        else:
+            OpenMaya.MGlobal.displayError('Empty selection')
 
 
 def initializePlugin(plugin):
@@ -295,6 +339,11 @@ def initializePlugin(plugin):
     try:
         plugin_fn.registerCommand(generatePiston.kPluginCmdName,
                                   generatePiston.cmdCreator)
+    except :
+        OpenMaya.MGlobal.displayError('Failed to initialize command : {}'.format(generatePiston.kPluginCmdName))
+        raise
+
+    try :
         plugin_fn.registerNode(
             pistonNode.type_name,
             pistonNode.type_id,
@@ -307,14 +356,14 @@ def initializePlugin(plugin):
         raise
     try :
         plugin_fn.registerNode(
-            vectorLengthNode.type_name,
-            vectorLengthNode.type_id,
-            vectorLengthNode.creator,
-            vectorLengthNode.initialize,
+            pistonVectorLengthNode.type_name,
+            pistonVectorLengthNode.type_id,
+            pistonVectorLengthNode.creator,
+            pistonVectorLengthNode.initialize,
             OpenMaya.MPxNode.kDependNode
         )
     except :
-        print('Failed to initialize the plugin :  {} !'.format(vectorLengthNode.type_name))
+        print('Failed to initialize the plugin :  {} !'.format(pistonVectorLengthNode.type_name))
         raise
 def uninitializePlugin(plugin):
     '''
@@ -328,7 +377,7 @@ def uninitializePlugin(plugin):
 
     try:
         plugin_fn.deregisterCommand(generatePiston.kPluginCmdName)
-        plugin_fn.deregisterNode(vectorLengthNode.type_id)
+        plugin_fn.deregisterNode(pistonVectorLengthNode.type_id)
         plugin_fn.deregisterNode(pistonNode.type_id)
     except:
         print('Failed to uninitialize the plugin :  {} !'.format(pistonNode.type_name))
