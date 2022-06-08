@@ -1,7 +1,24 @@
 from maya.api import OpenMaya
 import math
 import pymel.core as pm
+import importlib
+import sys
+
+for module in sys.modules.copy() :
+    if module.startswith('Piston_UI') :
+        del sys.modules[module]
+import Piston_UI
+
 maya_useNewAPI = True
+
+# This Plugin is an auto-rig for pistons movements,
+# I created it to exercise myself with python / pymel / OpenMaya scripting.
+# Here are declared the commands to generate the rig, and some custom utility nodes.
+# In order to avoid conflict with other utility plugins the nodes are prefixed with "piston".
+# I will maybe add, in the future, "legacy" commands  that doesnt use the plugin nodes and therefore doesnt create
+# a dependency to this plug-in.
+
+# Author : Baptiste Fraboul
 
 
 def buildEffectorJoints(start, end):
@@ -63,26 +80,6 @@ def doPistonGraph(base_joint, crank_end_joint, shaft_end_joint, effector_end):
     solver.output.connect(effector_end.translateX)
 
 
-
-
-def find_offset_axis(node) :
-    forbiden_values = (
-        90,
-        -90,
-        180,
-        -180)
-    orient_axis = ('.jointOrientX',
-                   '.jointOrientY',
-                   '.jointOrientZ',)
-    for axis in orient_axis :
-        value = pm.getAttr(node + axis)
-        for forbid in forbiden_values :
-            if value != (forbid or 0):
-                return axis
-            else :
-                pass
-
-
 class pistonVectorLengthNode(OpenMaya.MPxNode):
     '''A node that return the length of a given vector'''
     type_id = OpenMaya.MTypeId(0x900FF)
@@ -102,6 +99,8 @@ class pistonVectorLengthNode(OpenMaya.MPxNode):
 
     @classmethod
     def initialize(cls):
+
+
         print('Plugin init  : {} '.format(pistonVectorLengthNode.type_name))
         numeric_attribute = OpenMaya.MFnNumericAttribute()
 
@@ -160,7 +159,6 @@ class pistonVectorLengthNode(OpenMaya.MPxNode):
             output_handle = datablock.outputValue(self.output)
             output_handle.setFloat(result)
             output_handle.setClean()
-
 
 
 class pistonNode(OpenMaya.MPxNode):
@@ -258,7 +256,27 @@ class pistonNode(OpenMaya.MPxNode):
             output_handle.setClean()
 
 
+class legacyPistonLength(OpenMaya.MPxCommand):
+    """
+    Generate a tree graph that output the length of a vector-type unit (rotation, translation, color etc.) using
+    only maya regular nodes. Work in progress
+    """
+    kPluginCmdName = 'legacyPistonLengthTree'
+    def __init__(self):
+        OpenMaya.MPxCommand.__init__(self)
+
+    @classmethod
+    def cmdCreator(cls):
+        return legacyPistonLength()
+
+    def doIt(self, args):
+        print("This does nothing work in progress")
+
 class generatePiston(OpenMaya.MPxCommand):
+    """
+    This command generate the node tree for a piston after selecting start and end joint.
+    It does use the custom nodes created with this pugin
+    """
     kPluginCmdName = 'generatePiston'
 
     def __init__(self):
@@ -315,6 +333,7 @@ class generatePiston(OpenMaya.MPxCommand):
                     doPistonGraph(base_joint, crank_end, shaft_start, effector_end)
                     base_joint.rotateX.lock()
                     base_joint.rotateY.lock()
+                    pm.select(base_joint, replace = True)
 
                 else:
                     OpenMaya.MGlobal.displayError('First joint must have only children to generate piston rig')
@@ -333,7 +352,6 @@ def initializePlugin(plugin):
     :param Plugin: MObject the plugin to initialize
     :return:
     '''
-
     plugin_fn = OpenMaya.MFnPlugin(plugin, 'Baptiste Fraboul', '0.0.1')
 
     try:
@@ -365,6 +383,7 @@ def initializePlugin(plugin):
     except :
         print('Failed to initialize the plugin :  {} !'.format(pistonVectorLengthNode.type_name))
         raise
+
 def uninitializePlugin(plugin):
     '''
     Called when the plugin is unloaded in Maya
