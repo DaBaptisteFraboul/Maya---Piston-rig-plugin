@@ -15,19 +15,32 @@ replicate in large scale and expressions need to evaluate each frame.
   * Relying mostly on DAG graph evaluation (node based rig) ;
   * Easy to replicate.
 
-The solution I came with was creating the tools that didn't existed
+The solution I came with was creating tools that didn't existed.\
+The [crank-slider](https://en.wikipedia.org/wiki/Slider-crank_linkage) movement behind pistons rely on the following equation :
+
+<p align="center">
+   <img width="570" height="56" src="https://user-images.githubusercontent.com/100163862/172856495-b9fdfeff-6f41-4a79-b97c-6b0080a74cb5.png">
+</p>
+
+* x is the distance of piston 
+* r is the length of the crank
+* a is the angle of the the crank 
+* l is the length of the rod
 
 This was a proper excuse launch myself into plugin conception.
 
 ## What does the plugin add :
 
 The plugin add followings components :
+
 * 2 new nodetypes :
   * pistonNode [solvernode]   
   * pistonVectorLength [utility vector length node]
+  
 * 1 new command :
   * generatePiston() [Generate a rigging nodegraph from selected joints]
-* 1 new shelf 5 :
+  
+* 1 new shelf tab :
   * A button for each command and node added by the plugin
   * A flushUndo() shorcut button 
   * A cleanCommand() button that delete all nodes with plugin added nodetypes 
