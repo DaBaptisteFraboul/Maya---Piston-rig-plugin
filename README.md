@@ -3,7 +3,7 @@
 A short rigging plug-in made with Python for Crank shaft models. It is also a first step
 toward plug-in programming with Pymel and Maya.OpenMaya 2.0 api.
 
-## Quick Intro
+### Quick Intro
 
 Piston, even if looking simple are hard to make as a clean rig. 
 Using regular rigging methods (constraints, joints etc.) will usually result with cycling
@@ -29,7 +29,7 @@ The [crank-slider](https://en.wikipedia.org/wiki/Slider-crank_linkage) movement 
 
 This was a proper excuse launch myself into plugin conception.
 
-## What does the plugin add :
+#### What does the plugin add :
 
 The plugin add followings components :
 
@@ -39,7 +39,7 @@ The plugin add followings components :
   
 * 1 new command :
   * generatePiston() [Generate a rigging nodegraph from selected joints]
-  
+
 * 1 new shelf tab :
   * A button for each command and node added by the plugin
   * A flushUndo() shorcut button 
@@ -49,7 +49,12 @@ The plugin add followings components :
   <img width="226" height="62" src="https://user-images.githubusercontent.com/100163862/172846324-d6f71036-57cb-4b2b-b497-67df8b937d52.PNG">
 </p>
 
+#### Rig created by generatePiston()
+
+The command create a clean outliner hierarchy and genereate a proper node graph.\
+The piston are generated regardless of the postion of the given 3-joints chain. 
+
 ![Presentation](https://user-images.githubusercontent.com/100163862/172736931-b1ffac75-84f4-41b4-bae3-0121aab8d77e.gif)
 
-
+##### Tree graph generated
 ![001](https://user-images.githubusercontent.com/100163862/172805145-a6655b6c-e516-4495-b551-b4d2bf30bde8.PNG)
