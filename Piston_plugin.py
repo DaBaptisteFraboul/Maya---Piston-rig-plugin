@@ -3,10 +3,6 @@ import math
 import pymel.core as pm
 import importlib
 import sys
-
-for module in sys.modules.copy() :
-    if module.startswith('Piston_UI') :
-        del sys.modules[module]
 import Piston_UI
 
 maya_useNewAPI = True
@@ -353,6 +349,10 @@ def initializePlugin(plugin):
     :return:
     '''
     plugin_fn = OpenMaya.MFnPlugin(plugin, 'Baptiste Fraboul', '0.0.1')
+    try :
+        Piston_UI.generate_shelf()
+    except :
+        print(r'Couldn\'t create UI')
 
     try:
         plugin_fn.registerCommand(generatePiston.kPluginCmdName,
@@ -394,6 +394,17 @@ def uninitializePlugin(plugin):
 
     plugin_fn = OpenMaya.MFnPlugin(plugin)
 
+    # We completely unload modules to avoid error
+    try :
+        for module in sys.modules.copy():
+            if module.startswith('Piston_UI'):
+                del sys.modules[module]
+    except :
+        print('Cant\'t delete module Piston_UI')
+    try :
+        pm.deleteUI('Piston_plugin')
+    except :
+        print("Can't delete UI")
     try:
         plugin_fn.deregisterCommand(generatePiston.kPluginCmdName)
         plugin_fn.deregisterNode(pistonVectorLengthNode.type_id)

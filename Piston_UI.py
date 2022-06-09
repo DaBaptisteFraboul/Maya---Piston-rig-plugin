@@ -27,25 +27,21 @@ icons = {
     'generatePiston': abspath('icons/generatePiston.png'),
     'deleteNodes': abspath('icons/deleteNodes.png'),
     'pistonSolverNode': abspath('icons/pistonSolverNode.png'),
-    'pistonVectorLength': abspath('icons/pistonVectorLengthNode.png')
+    'pistonVectorLength': abspath('icons/pistonVectorLengthNode.png'),
+    'flushUndo':abspath('icons/flushUndo.png')
 }
 
 # Buttons commands for the shelf
 
-def generateCommand():
-    cmds.generatePiston()
+def generateCommand() :
+    pm.generatePiston()
 
 
 def deletePluginNodes():
-    """
-    Delete all the custom nodetypes created by the plugin
-    :return:
-    """
     plugin_nodetypes = [
         'pistonVectorLength',
         'pistonNode'
     ]
-
     for type in plugin_nodetypes:
         nodes = pm.ls(type=type)
         if nodes:
@@ -53,18 +49,21 @@ def deletePluginNodes():
                 if pm.objExists(nodes[i]):
                     pm.delete(nodes[i])
             print(type, ' : {} nodes deleted'.format(len(nodes)))
+    pm.flushUndo()
 
 
-def createSolver() :
-    cmds.createNode('pistonNode')
+def createSolver():
+    pm.createNode('pistonNode')
+
+def flushUndo():
+    pm.flushUndo()
 
 def createVectorLength():
-    cmds.createNode('pistonVectorLength')
+    pm.createNode('pistonVectorLength')
 
 # Generate the plugin Shelf
 
 def generate_shelf():
-
     # If the shelf exists delete it
     if pm.shelfLayout('Piston plugin', exists=True):
         print('Refreshing old shelf')
@@ -72,7 +71,7 @@ def generate_shelf():
             for each in pm.shelfLayout('Piston plugin', query=True, ca=True):
                 print(each)
                 pm.deleteUI(each)
-        pm.deleteUI('Piston plugin')
+        pm.deleteUI('Piston_plugin')
 
     # Create the shelf
     plugin_shelf = pm.shelfLayout('Piston plugin', parent='ShelfLayout')
@@ -93,6 +92,13 @@ def generate_shelf():
                    iol ='CLEAN',
                    parent=plugin_shelf)
 
+    pm.shelfButton(annotation='flushUndo() command shortcut,\n'
+                              'in order to avoid crash when reloading plugin',
+                   command = flushUndo,
+                   image=icons['flushUndo'],
+                   iol='FLUSH',
+                   parent=plugin_shelf)
+
     pm.shelfButton(annotation='Create pistonSolver in node editor',
                    command=createSolver,
                    image=icons['pistonSolverNode'],
@@ -106,5 +112,3 @@ def generate_shelf():
     # button that create the rig
 
     # button that delete all plugin-type nodes
-generate_shelf()
-
